@@ -1,99 +1,155 @@
 #include <iostream>
+#include <vector>
 #include <chrono>
-#include <cstdlib>
+#include <random>
 #include <omp.h>
+
 using namespace std;
-using namespace chrono;
 
-void print_array(int arr[], int size) 
+void bubbleSortSequential(vector<int> &arr)
+{
+    int n = arr.size();
+    for (int i = 0; i < n - 1; ++i)
     {
-    cout << "[ ";
-    for (int i = 0; i < size; i++) 
+        for (int j = 0; j < n - i - 1; ++j)
         {
+            if (arr[j] > arr[j + 1])
+                swap(arr[j], arr[j + 1]);
+        }
+    }
+    cout << "The array elements after sequential bubble sort are:" << endl;
+
+    for (int i = 0; i < arr.size(); ++i)
+    {
         cout << arr[i] << " ";
-        }
-    cout << "]\n";
     }
+    cout << endl;
+}
 
-void sequential_bubble_sort(int arr[], int size, double &seq_time) 
+void bubbleSortParallel(vector<int> &arr)
+{
+    int n = arr.size();
+#pragma omp parallel for
+    for (int i = 0; i < n - 1; ++i)
     {
-    int temp[size];
-    copy(arr, arr + size, temp);
-
-    auto start = high_resolution_clock::now();
-    for (int i = 0; i < size - 1; i++) 
+        for (int j = 0; j < n - i - 1; ++j)
         {
-        for (int j = 0; j < size - i - 1; j++) 
-            {
-            if (temp[j] > temp[j + 1]) 
-                {
-                swap(temp[j], temp[j + 1]);
-                }
-            }
+            if (arr[j] > arr[j + 1])
+                swap(arr[j], arr[j + 1]);
         }
-    auto end = high_resolution_clock::now();
-    seq_time = duration<double>(end - start).count();
+    }
+}
 
-    cout << "Sequential Bubble Sort Time: " << seq_time << " s\n";
-    print_array(temp, size);
+void merge(vector<int> &arr, int left, int mid, int right)
+{
+    int n1 = mid - left + 1;
+    int n2 = right - mid;
+
+    vector<int> L(n1), R(n2);
+
+    for (int i = 0; i < n1; ++i)
+        L[i] = arr[left + i];
+    for (int i = 0; i < n2; ++i)
+        R[i] = arr[mid + 1 + i];
+
+    int i = 0, j = 0, k = left;
+    while (i < n1 && j < n2)
+    {
+        if (L[i] <= R[j])
+            arr[k++] = L[i++];
+        else
+            arr[k++] = R[j++];
     }
 
-void parallel_odd_even_sort(int arr[], int size, double seq_time) 
+    while (i < n1)
+        arr[k++] = L[i++];
+    while (j < n2)
+        arr[k++] = R[j++];
+}
+
+void mergeSortSequential(vector<int> &arr, int left, int right)
+{
+    if (left < right)
     {
-    int temp[size];
-    copy(arr, arr + size, temp);
+        int mid = left + (right - left) / 2;
 
-    auto start = high_resolution_clock::now();
-    bool sorted = false;
+        mergeSortSequential(arr, left, mid);
+        mergeSortSequential(arr, mid + 1, right);
 
-    while (!sorted) 
+        merge(arr, left, mid, right);
+    }
+}
+
+void mergeSortParallel(vector<int> &arr, int left, int right)
+{
+    if (left < right)
+    {
+        int mid = left + (right - left) / 2;
+
+#pragma omp parallel sections
         {
-        sorted = true;
+#pragma omp section
+            mergeSortParallel(arr, left, mid);
 
-        #pragma omp parallel for shared(temp, sorted)
-        for (int i = 1; i < size - 1; i += 2) 
-            {
-            if (temp[i] > temp[i + 1]) 
-                {
-                swap(temp[i], temp[i + 1]);
-                sorted = false;
-                }
-            }
-
-        #pragma omp parallel for shared(temp, sorted)
-        for (int i = 0; i < size - 1; i += 2) 
-            {
-            if (temp[i] > temp[i + 1]) 
-                {
-                swap(temp[i], temp[i + 1]);
-                sorted = false;
-                }
-            }
+#pragma omp section
+            mergeSortParallel(arr, mid + 1, right);
         }
 
-    auto end = high_resolution_clock::now();
-    double par_time = duration<double>(end - start).count();
-
-    cout << "Parallel Bubble Sort Time: " << par_time << " s\n";
-    print_array(temp, size);
-    cout << "Speedup: " << seq_time / par_time << "\n";
+        merge(arr, left, mid, right);
     }
+}
 
-int main() 
-    {
+vector<int> generateRandomArray(int size)
+{
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_int_distribution<int> dist(0, 10000);
+
+    vector<int> arr(size);
+    for (int i = 0; i < size; ++i)
+        arr[i] = dist(gen);
+    return arr;
+}
+
+int main()
+{
     int size;
-    cout << "Enter size of array: ";
+    cout << "Enter the size of the array:";
     cin >> size;
+    vector<int> arr = generateRandomArray(size);
 
-    int arr[size];
-    for (int &x : arr) x = rand() % size;
+    double time_seq_bubble, time_par_bubble, time_seq_merge, time_par_merge;
 
-    cout << "\nInput Array: ";
-    print_array(arr, size);
+    vector<int> arr_bubble = arr;
+    auto start = chrono::high_resolution_clock::now();
+    bubbleSortSequential(arr_bubble);
+    auto end = chrono::high_resolution_clock::now();
+    time_seq_bubble = chrono::duration<double>(end - start).count();
+    cout << "Time required for Bubble Sort sequential is: " << time_seq_bubble << " seconds" << endl;
 
-    double seq_time;
-    sequential_bubble_sort(arr, size, seq_time);
-    parallel_odd_even_sort(arr, size, seq_time);
+    vector<int> arr_par_bubble = arr;
+    start = chrono::high_resolution_clock::now();
+    bubbleSortParallel(arr_par_bubble);
+    end = chrono::high_resolution_clock::now();
+    time_par_bubble = chrono::duration<double>(end - start).count();
+    cout << "Time required for Bubble Sort parallel is: " << time_par_bubble << " seconds" << endl;
+
+    vector<int> arr_merge = arr;
+    start = chrono::high_resolution_clock::now();
+    mergeSortSequential(arr_merge, 0, arr_merge.size() - 1);
+    end = chrono::high_resolution_clock::now();
+    time_seq_merge = chrono::duration<double>(end - start).count();
+    cout << "Time required for Merge Sort sequential is: " << time_seq_merge << " seconds" << endl;
+
+    vector<int> arr_par_merge = arr;
+    start = chrono::high_resolution_clock::now();
+    mergeSortParallel(arr_par_merge, 0, arr_par_merge.size() - 1);
+    end = chrono::high_resolution_clock::now();
+    time_par_merge = chrono::duration<double>(end - start).count();
+    cout << "Time required for Merge Sort parallel is: " << time_par_merge << " seconds" << endl;
+
+    cout << "Bubble Sort Speedup time: " << (time_par_bubble > 0 ? time_seq_bubble / time_par_bubble : 0) << endl;
+    cout << "Merge Sort Speedup time: " << (time_par_merge > 0 ? time_seq_merge / time_par_merge : 0) << endl;
 
     return 0;
-    }
+}
