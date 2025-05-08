@@ -1,4 +1,5 @@
-#include <iostream>
+#include <iostream>  //g++ -fopenmp lp5.cpp -o lp5
+                    // ./lp5
 #include <vector>
 #include <queue>
 #include <stack>
